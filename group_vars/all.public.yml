@@ -1,0 +1,5 @@
+---
+# Replace values and rename file to all.yml
+domain: your-domain.com
+email: email@your-domain.com
+timezone: Europe/Berlin

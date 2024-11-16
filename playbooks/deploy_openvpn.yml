@@ -1,0 +1,41 @@
+# Untestet
+- name: Deploy OpenVPN in Docker
+  hosts: raspberrypi
+  become: yes
+  vars:
+    domain: "vpn.{{ domain }}"  # Replace with your VPN subdomain
+  tasks:
+    - name: Create directory for OpenVPN configuration
+      file:
+        path: /home/{{ ansible_user }}/openvpn
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+    
+    - name: Initialize OpenVPN configuration (if not already initialized)
+      command: >
+        docker run -v /home/{{ ansible_user }}/openvpn:/etc/openvpn --rm kylemanna/openvpn ovpn_genconfig -u udp://{{ domain }}
+      args:
+        creates: /home/{{ ansible_user }}/openvpn/openvpn.conf
+
+    - name: Generate OpenVPN server keys (if not already generated)
+      command: >
+        docker run -v /home/{{ ansible_user }}/openvpn:/etc/openvpn --rm -it kylemanna/openvpn ovpn_initpki nopass
+      args:
+        creates: /home/{{ ansible_user }}/openvpn/pki
+
+    - name: Run OpenVPN container
+      docker_container:
+        name: openvpn
+        image: kylemanna/openvpn
+        restart_policy: always
+        cap_add:
+          - NET_ADMIN
+        volumes:
+          - /home/{{ ansible_user }}/openvpn:/etc/openvpn
+        labels:
+          - "traefik.enable=true"
+          - "traefik.tcp.routers.openvpn.entrypoints=openvpn"
+          - "traefik.tcp.routers.openvpn.rule=HostSNI(`*`)"
+          - "traefik.tcp.routers.openvpn.service=openvpn"
+          - "traefik.tcp.services.openvpn.loadbalancer.server.port=1194"

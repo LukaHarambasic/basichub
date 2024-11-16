@@ -1,0 +1,65 @@
+# Untestet
+- name: Deploy Traefik as Reverse Proxy
+  hosts: raspberrypi
+  become: yes
+  vars:
+    domain: "{{ domain }}"  # Replace with your actual domain
+    email: "{{ email }}"  # Replace with your email for Let's Encrypt
+  tasks:
+    - name: Create Traefik configuration directory
+      file:
+        path: /home/{{ ansible_user }}/traefik
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+    
+    - name: Create Traefik configuration file
+      copy:
+        dest: /home/{{ ansible_user }}/traefik/traefik.yml
+        content: |
+          entryPoints:
+            web:
+              address: ":80"
+            websecure:
+              address: ":443"
+            openvpn:
+              address: ":1194"
+
+          providers:
+            docker:
+              endpoint: "unix:///var/run/docker.sock"
+              exposedByDefault: false
+
+          certificatesResolvers:
+            letsencrypt:
+              acme:
+                email: "{{ email }}"
+                storage: /letsencrypt/acme.json
+                httpChallenge:
+                  entryPoint: web
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+    
+    - name: Create acme.json file for Let's Encrypt
+      file:
+        path: /home/{{ ansible_user }}/traefik/acme.json
+        state: touch
+        mode: '600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Run Traefik container
+      docker_container:
+        name: traefik
+        image: traefik:v2.9
+        restart_policy: always
+        ports:
+          - "80:80"
+          - "443:443"
+          - "8080:8080"  # For Traefik dashboard (secure this in production)
+        volumes:
+          - "/var/run/docker.sock:/var/run/docker.sock:ro"
+          - "/home/{{ ansible_user }}/traefik/traefik.yml:/traefik.yml:ro"
+          - "/home/{{ ansible_user }}/traefik/acme.json:/letsencrypt/acme.json"
+        labels:
+          - "traefik.enable=true"

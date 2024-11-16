@@ -1,0 +1,68 @@
+- name: Deploy Home Assistant with Zigbee Support
+  hosts: raspberrypi
+  become: yes
+  vars:
+    homeassistant_port: 8123
+  tasks:
+    - name: Create directory for Home Assistant configuration
+      file:
+        path: /home/{{ ansible_user }}/homeassistant
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+
+    - name: Pull Home Assistant Docker image
+      docker_image:
+        name: homeassistant/home-assistant
+        tag: stable
+        source: pull
+
+    - name: Find Zigbee USB stick
+      shell: "ls /dev/serial/by-id/ | grep -i 'usb-Itead_Sonoff_Zigbee'"
+      register: zigbee_device_output
+      changed_when: false
+
+    - name: Fail if Zigbee USB stick is not found
+      fail:
+        msg: "Zigbee USB stick not found. Ensure it is plugged in and the correct pattern matches."
+      when: zigbee_device_output.stdout == ""
+
+    - name: Get full Zigbee device path
+      set_fact:
+        zigbee_device: "/dev/serial/by-id/{{ zigbee_device_output.stdout }}"
+
+    - name: Debug Zigbee device path
+      debug:
+        msg: "Detected Zigbee device path: {{ zigbee_device }}"
+
+    - name: Ensure the user is in the dialout group
+      user:
+        name: "{{ ansible_user }}"
+        groups: dialout
+        append: true
+
+    - name: Ensure correct permissions on Zigbee device
+      file:
+        path: "{{ zigbee_device }}"
+        owner: root
+        group: dialout
+        mode: '0660'
+
+    - name: Run Home Assistant container
+      docker_container:
+        name: homeassistant
+        image: homeassistant/home-assistant:stable
+        restart_policy: always
+        ports:
+          - "{{ homeassistant_port }}:8123"
+        volumes:
+          - /home/{{ ansible_user }}/homeassistant:/config
+        devices:
+          - "{{ zigbee_device }}:/dev/ttyUSB0"
+        env:
+          TZ: "{{ timezone }}"
+        privileged: true
+        state: started
+        pull: yes
+        recreate: false
