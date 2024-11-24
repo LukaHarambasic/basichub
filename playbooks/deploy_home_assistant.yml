@@ -1,16 +1,36 @@
+# playbooks/deploy_home_assistant.yml
+
 - name: Deploy Home Assistant with Zigbee Support
   hosts: raspberrypi
   become: yes
   vars:
     homeassistant_port: 8123
+    homeassistant_config_dir: /home/{{ ansible_user }}/homeassistant
   tasks:
     - name: Create directory for Home Assistant configuration
       file:
-        path: /home/{{ ansible_user }}/homeassistant
+        path: "{{ homeassistant_config_dir }}"
         state: directory
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         mode: '0755'
+
+    - name: Get Docker bridge network subnet
+      shell: >
+        docker network inspect bridge --format '{% raw %}{{ range .IPAM.Config }}{{ .Subnet }}{{ end }}{% endraw %}'
+      register: docker_bridge_subnet
+      changed_when: false
+
+
+    - name: Create or update configuration.yaml for Home Assistant
+      template:
+        src: ../templates/homeassistant_configuration.yaml.j2
+        dest: "{{ homeassistant_config_dir }}/configuration.yaml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+      vars:
+        docker_bridge_subnet: "{{ docker_bridge_subnet.stdout }}"
 
     - name: Pull Home Assistant Docker image
       docker_image:
@@ -32,10 +52,6 @@
       set_fact:
         zigbee_device: "/dev/serial/by-id/{{ zigbee_device_output.stdout }}"
 
-    - name: Debug Zigbee device path
-      debug:
-        msg: "Detected Zigbee device path: {{ zigbee_device }}"
-
     - name: Ensure the user is in the dialout group
       user:
         name: "{{ ansible_user }}"
@@ -49,20 +65,39 @@
         group: dialout
         mode: '0660'
 
+    - name: Create Docker network for Traefik
+      docker_network:
+        name: traefik_network
+        state: present
+
     - name: Run Home Assistant container
       docker_container:
         name: homeassistant
         image: homeassistant/home-assistant:stable
         restart_policy: always
-        ports:
-          - "{{ homeassistant_port }}:8123"
         volumes:
-          - /home/{{ ansible_user }}/homeassistant:/config
+          - "{{ homeassistant_config_dir }}:/config"
         devices:
           - "{{ zigbee_device }}:/dev/ttyUSB0"
         env:
           TZ: "{{ timezone }}"
         privileged: true
+        labels:
+          traefik.enable: "true"
+          traefik.http.routers.homeassistant.rule: "Host(`home.basichub.de`)"
+          traefik.http.routers.homeassistant.entrypoints: "websecure"
+          traefik.http.routers.homeassistant.tls.certresolver: "cloudflare"
+          traefik.http.services.homeassistant.loadbalancer.server.port: "8123"
+        networks:
+          - name: traefik_network
         state: started
         pull: yes
-        recreate: false
+        recreate: true
+      register: homeassistant_container
+
+    - name: Restart Home Assistant container if configuration changed
+      docker_container:
+        name: homeassistant
+        state: started
+        recreate: true
+      when: homeassistant_container.changed

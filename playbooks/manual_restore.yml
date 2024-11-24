@@ -1,0 +1,13 @@
+- name: Restore user home directory to Raspberry Pi
+  hosts: raspberrypi
+  become: yes
+  vars:
+    backup_dir: "{{ ansible_env.HOME }}/raspberry_pi_backups"
+  tasks:
+    - name: Rsync the backup directory from control machine to the user's home directory on Raspberry Pi
+      ansible.builtin.command: >
+        rsync -avz --progress
+        {{ ansible_env.HOME }}/raspberry_pi_backups/{{ ansible_user }}/
+        /home/{{ ansible_user }}/
+      delegate_to: localhost
+      become: no

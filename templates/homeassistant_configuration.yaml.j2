@@ -1,0 +1,11 @@
+# templates/homeassistant_configuration.yaml.j2
+
+# Home Assistant Configuration
+
+default_config:
+
+# HTTP settings for reverse proxy
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - "{{ docker_bridge_subnet }}"

@@ -1,0 +1,19 @@
+- name: Backup user home directory from Raspberry Pi to control machine
+  hosts: raspberrypi
+  become: yes
+  vars:
+    backup_dir: "{{ ansible_env.HOME }}/raspberry_pi_backups"
+  tasks:
+    - name: Ensure backup directory exists on the control machine
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+
+    - name: Rsync the user home directory to the backup directory on localhost
+      ansible.builtin.command: >
+        rsync -avz --progress
+        /home/{{ ansible_user }}/
+        {{ ansible_env.HOME }}/raspberry_pi_backups/{{ ansible_user }}/
+      delegate_to: localhost
+      become: no

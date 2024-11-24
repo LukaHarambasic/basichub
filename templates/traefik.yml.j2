@@ -1,64 +1,36 @@
-# Traefik Configuration Template (traefik.yml.j2)
+# templates/traefik.yml.j2
+
+log:
+  level: DEBUG
 
 entryPoints:
   web:
     address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
   websecure:
     address: ":443"
-  openvpn:
-    address: ":1194"
-
-api:
-  dashboard: true
 
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
+    network: traefik_network
     watch: true
 
 certificatesResolvers:
-  letsencrypt:
+  cloudflare:
     acme:
       email: "{{ email }}"
-      storage: /letsencrypt/acme.json
-      httpChallenge:
-        entryPoint: web
+      storage: "/acme.json"
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
 
-# Middleware for authentication (optional)
-middlewares:
-  auth:
-    basicAuth:
-      users:
-        - "admin:{{ traefik_dashboard_password_hash }}"
-
-# HTTP Configuration
-http:
-  routers:
-    # Router for Traefik Dashboard (optional)
-    traefik-dashboard:
-      entryPoints:
-        - websecure
-      rule: Host(`traefik.{{ domain }}`)
-      service: api@internal
-      tls:
-        certResolver: letsencrypt
-      middlewares:
-        - auth  # Secures the dashboard with basic auth
-
-# TCP Configuration for OpenVPN
-tcp:
-  routers:
-    openvpn:
-      entryPoints:
-        - openvpn
-      rule: "HostSNI(`*`)"
-      service: openvpn-service
-      tls:
-        passthrough: true
-
-  services:
-    openvpn-service:
-      loadBalancer:
-        servers:
-          - address: "127.0.0.1:1194"
+api:
+  dashboard: true
