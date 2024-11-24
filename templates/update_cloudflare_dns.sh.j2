@@ -1,0 +1,56 @@
+#!/bin/bash
+
+ZONE_ID="{{ cloudflare_zone_id }}"
+RECORD_ID="{{ cloudflare_record_id }}"
+RECORD_NAME="{{ cloudflare_record_name }}"
+API_TOKEN=$(cat /root/.cloudflare_token)
+
+# Step 1: Get the current public IP
+echo "Fetching current public IP..."
+IP=$(curl -s http://ipv4.icanhazip.com)
+if [ -z "$IP" ]; then
+  echo "Failed to retrieve public IP."
+  exit 1
+fi
+echo "Current Public IP: $IP"
+
+# Step 2: Check the last known IP
+IP_FILE="/var/tmp/current_public_ip.txt"
+LAST_IP=$(cat "$IP_FILE" 2>/dev/null || echo "")
+echo "Last known IP: $LAST_IP"
+
+# Step 3: Compare IPs
+if [ "$IP" = "$LAST_IP" ]; then
+  echo "IP has not changed. Exiting."
+  exit 0
+fi
+echo "IP has changed. Proceeding to update DNS record."
+
+# Step 4: Construct the API URL
+API_URL="https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID"
+echo "API URL: $API_URL"
+
+# Step 5: Update the DNS record
+echo "Updating DNS record for $RECORD_NAME..."
+RESPONSE=$(curl -s -X PUT "$API_URL" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "type": "A",
+    "name": "'"$RECORD_NAME"'",
+    "content": "'"$IP"'",
+    "ttl": 1,
+    "proxied": false
+  }')
+
+# Step 6: Check the API response
+echo "API Response: $RESPONSE"
+SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+if [ "$SUCCESS" = "true" ]; then
+  echo "DNS record updated successfully."
+  echo "$IP" > "$IP_FILE"
+else
+  echo "Failed to update DNS record."
+  echo "$RESPONSE" | jq
+  exit 1
+fi

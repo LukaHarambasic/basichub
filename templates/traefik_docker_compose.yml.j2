@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.10
+    restart: always
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.myresolver.acme.email={{ email }}"
+      - "--certificatesresolvers.myresolver.acme.storage=/acme.json"
+      - "--api.dashboard=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik.yml:/traefik.yml:ro"
+      - "./acme.json:/acme.json"
+    environment:
+      - CLOUDFLARE_API_TOKEN={{ cloudflare_api_token }}
+      - CLOUDFLARE_EMAIL={{ email }}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.{{ domain }}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+      - "traefik.http.routers.traefik.service=api@internal"
+    

@@ -1,0 +1,44 @@
+# playbooks/setup_cloudflare_ddns.yml
+
+- name: Setup Cloudflare DDNS Update
+  hosts: raspberrypi
+  become: yes
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - jq
+        state: present
+        update_cache: yes
+
+    - name: Ensure /var/tmp directory exists
+      file:
+        path: /var/tmp
+        state: directory
+        owner: root
+        group: root
+        mode: '1777'  # Sticky bit, standard for /var/tmp
+
+    - name: Create Cloudflare API token file
+      copy:
+        dest: /root/.cloudflare_token
+        content: "{{ cloudflare_api_token }}"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Copy update script
+      template:
+        src: ../templates/update_cloudflare_dns.sh.j2
+        dest: /usr/local/bin/update_cloudflare_dns.sh
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Setup cronjob for Cloudflare DDNS update
+      cron:
+        name: "Update Cloudflare DNS every 5 minutes"
+        user: root
+        job: "/usr/local/bin/update_cloudflare_dns.sh >/dev/null 2>&1"
+        minute: "*/1"

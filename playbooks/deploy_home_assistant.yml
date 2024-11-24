@@ -1,9 +1,12 @@
-- name: Deploy Home Assistant with Zigbee Support
+- name: Deploy Home Assistant with Traefik Integration
   hosts: raspberrypi
   become: yes
-  vars:
-    homeassistant_port: 8123
   tasks:
+    - name: Ensure Docker network for Traefik exists
+      docker_network:
+        name: traefik_net
+        state: present
+
     - name: Create directory for Home Assistant configuration
       file:
         path: /home/{{ ansible_user }}/homeassistant
@@ -14,7 +17,7 @@
 
     - name: Pull Home Assistant Docker image
       docker_image:
-        name: homeassistant/home-assistant
+        name: ghcr.io/home-assistant/home-assistant
         tag: stable
         source: pull
 
@@ -49,20 +52,25 @@
         group: dialout
         mode: '0660'
 
-    - name: Run Home Assistant container
-      docker_container:
-        name: homeassistant
-        image: homeassistant/home-assistant:stable
-        restart_policy: always
-        ports:
-          - "{{ homeassistant_port }}:8123"
-        volumes:
-          - /home/{{ ansible_user }}/homeassistant:/config
-        devices:
-          - "{{ zigbee_device }}:/dev/ttyUSB0"
-        env:
-          TZ: "{{ timezone }}"
-        privileged: true
-        state: started
-        pull: yes
-        recreate: false
+    - name: Copy Home Assistant Docker Compose file
+      template:
+        src: ../templates/home_assistent_docker_compose.yml.j2
+        dest: /home/{{ ansible_user }}/homeassistant/docker-compose.yml
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Stop and remove existing Home Assistant container if it exists
+      shell: |
+        if docker ps -a --filter "name=homeassistant" --format "{{ '{{.Names}}' }}" | grep -q homeassistant; then
+          docker stop homeassistant && docker rm homeassistant
+        fi
+      args:
+        chdir: /home/{{ ansible_user }}/homeassistant
+      register: container_cleanup
+      ignore_errors: true
+
+    - name: Run Home Assistant with Docker Compose
+      shell: docker compose up -d
+      args:
+        chdir: /home/{{ ansible_user }}/homeassistant

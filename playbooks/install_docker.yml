@@ -6,6 +6,13 @@
       apt:
         update_cache: yes
 
+    - name: Install required Python packages for Ansible modules
+      pip:
+        name: docker
+        state: present
+        executable: pip3
+      become: yes
+
     - name: Install packages to allow apt to use a repository over HTTPS
       apt:
         name:

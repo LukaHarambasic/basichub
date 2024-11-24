@@ -1,0 +1,20 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    restart: always
+    volumes:
+      - /home/{{ ansible_user }}/homeassistant:/config
+    devices:
+      - "{{ zigbee_device }}:/dev/ttyUSB0"
+    environment:
+      TZ: "{{ ansible_facts['timezone'] | default('UTC') }}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homeassistant.rule=Host(`home.{{ domain }}`)"
+      - "traefik.http.routers.homeassistant.entrypoints=websecure"
+      - "traefik.http.routers.homeassistant.tls.certresolver=myresolver"
+    ports:
+      - "8123:8123"
+    networks:
+      - traefik_net
