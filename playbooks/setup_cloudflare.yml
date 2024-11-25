@@ -38,7 +38,7 @@
 
     - name: Setup cronjob for Cloudflare DDNS update
       cron:
-        name: "Update Cloudflare DNS every 5 minutes"
+        name: "Update Cloudflare DNS every 1 minutes"
         user: root
         job: "/usr/local/bin/update_cloudflare_dns.sh >/dev/null 2>&1"
         minute: "*/1"

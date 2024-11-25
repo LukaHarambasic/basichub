@@ -18,3 +18,7 @@ services:
       - "8123:8123"
     networks:
       - traefik_net
+
+networks:
+  traefik_net:
+    external: true

@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   traefik:
     image: traefik:v2.10
     restart: always
     command:
       - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.exposedbydefault=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.myresolver.acme.dnschallenge=true"
@@ -22,8 +20,8 @@ services:
       - "./traefik.yml:/traefik.yml:ro"
       - "./acme.json:/acme.json"
     environment:
-      - CLOUDFLARE_API_TOKEN={{ cloudflare_api_token }}
-      - CLOUDFLARE_EMAIL={{ email }}
+      - CLOUDFLARE_EMAIL={{ cloudflare_email }}
+      - CLOUDFLARE_API_KEY={{ cloudflare_api_key }}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`traefik.{{ domain }}`)"
