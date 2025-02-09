@@ -1,0 +1,40 @@
+- name: Setup backup folder on control machine
+  hosts: localhost
+  gather_facts: yes
+  tasks:
+    - name: Define backup filename with current timestamp
+      set_fact:
+        backup_filename: "{{ lookup('pipe','date +%Y_%m_%d_%H_%M') }}.tar.gz"
+      run_once: true
+
+    - name: Create the backup folder if it doesn't exist
+      file:
+        path: "{{ backup_base_dir }}"
+        state: directory
+        mode: '0755'
+
+- name: Back up the entire user directory from Raspberry Pi
+  hosts: raspberrypi
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Create tarball of /home/{{ ansible_user }}
+      command: tar czf /tmp/{{ hostvars['localhost']['backup_filename'] }} -C / home/{{ ansible_user }}
+      args:
+        creates: /tmp/{{ hostvars['localhost']['backup_filename'] }}
+
+    - name: Verify backup file exists on Raspberry Pi
+      command: ls -l /tmp/{{ hostvars['localhost']['backup_filename'] }}
+      register: backup_file_listing
+      changed_when: false
+
+    - name: Fetch the backup tarball to control machine
+      fetch:
+        src: /tmp/{{ hostvars['localhost']['backup_filename'] }}
+        dest: "{{ backup_base_dir }}/{{ hostvars['localhost']['backup_filename'] }}"
+        flat: yes
+
+    - name: Remove temporary backup file from Raspberry Pi
+      file:
+        path: /tmp/{{ hostvars['localhost']['backup_filename'] }}
+        state: absent

@@ -1,0 +1,54 @@
+---
+- name: Determine which backup file to restore (runs on control machine)
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: If no backup_file is provided, search for backups in backup_base_dir
+      find:
+        paths: "{{ backup_base_dir }}"
+        patterns: "*.tar.gz"
+        file_type: file
+      register: found_backups
+      when: backup_file | default('') == ""
+
+    - name: Fail if no backup files found and no backup_file provided
+      fail:
+        msg: "No backup files found in {{ backup_base_dir }}."
+      when:
+        - backup_file | default('') == ""
+        - found_backups.matched == 0
+
+    - name: Choose the latest backup file if backup_file not provided
+      set_fact:
+        backup_file_final: "{{ (found_backups.files | sort(attribute='mtime'))[-1].path }}"
+      when: backup_file | default('') == ""
+
+    - name: Use the provided backup_file if available
+      set_fact:
+        backup_file_final: "{{ backup_file }}"
+      when: backup_file | default('') != ""
+
+    - debug:
+        msg: "Using backup file: {{ backup_file_final }}"
+
+- name: Restore the user directory backup to Raspberry Pi
+  hosts: raspberrypi
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Copy backup tarball from control machine to Raspberry Pi
+      copy:
+        src: "{{ hostvars['localhost']['backup_file_final'] }}"
+        dest: "/tmp/{{ hostvars['localhost']['backup_file_final'] | basename }}"
+        mode: '0644'
+
+    - name: Extract the backup archive to root (/) directory
+      unarchive:
+        src: "/tmp/{{ hostvars['localhost']['backup_file_final'] | basename }}"
+        dest: /
+        remote_src: yes
+
+    - name: Clean up temporary backup archive from Raspberry Pi
+      file:
+        path: "/tmp/{{ hostvars['localhost']['backup_file_final'] | basename }}"
+        state: absent
