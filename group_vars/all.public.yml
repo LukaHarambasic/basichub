@@ -1,5 +1,6 @@
 ---
 # Replace values and rename file to all.yml
-domain: your-domain.com
-email: email@your-domain.com
-timezone: Europe/Berlin
+domain: "your-domain.com"
+email: "email@your-domain.com"
+timezone: "Europe/Berlin"
+tailscale_auth_key: "tskey-auth-abc123..."

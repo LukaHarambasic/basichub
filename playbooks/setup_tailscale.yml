@@ -1,0 +1,58 @@
+- name: Setup Tailscale
+  hosts: raspberrypi
+  become: yes
+
+  pre_tasks:
+    - name: Check if Tailscale is already running
+      command: tailscale ip -4
+      register: tailscale_ip
+      changed_when: false
+      ignore_errors: yes
+
+    - name: End play if Tailscale is already set up
+      meta: end_play
+      when: tailscale_ip.stdout | trim != ""
+
+  tasks:
+    - name: Fail if tailscale_auth_key is not provided
+      fail:
+        msg: "You must supply a valid tailscale_auth_key. Please set the tailscale_auth_key variable."
+      when: tailscale_auth_key == ""
+
+    - name: Ensure apt-transport-https is installed
+      apt:
+        name: apt-transport-https
+        state: present
+
+    - name: Download Tailscale GPG key for Bullseye
+      get_url:
+        url: "https://pkgs.tailscale.com/stable/raspbian/bullseye.noarmor.gpg"
+        dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        mode: "0644"
+
+    - name: Download Tailscale APT repository list for Bullseye
+      get_url:
+        url: "https://pkgs.tailscale.com/stable/raspbian/bullseye.tailscale-keyring.list"
+        dest: /etc/apt/sources.list.d/tailscale.list
+        mode: "0644"
+
+    - name: Update apt cache and install Tailscale package
+      apt:
+        name: tailscale
+        state: present
+        update_cache: yes
+
+    - name: Ensure tailscaled service is enabled and started
+      service:
+        name: tailscaled
+        state: started
+        enabled: yes
+
+    - name: Register the device with Tailscale using the auth key
+      command: >-
+        tailscale up --auth-key={{ tailscale_auth_key }} --reset
+      register: tailscale_up_output
+
+    - name: Display Tailscale output
+      debug:
+        msg: "Tailscale up output: {{ tailscale_up_output.stdout }}"
