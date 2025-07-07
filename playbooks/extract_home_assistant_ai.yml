@@ -1,0 +1,97 @@
+---
+- name: Ensure AI output directory exists on control machine
+  hosts: localhost
+  gather_facts: yes
+  tasks:
+    - name: Ensure AI output directory exists
+      file:
+        path: "{{ ai_base_dir }}"
+        state: directory
+        mode: '0755'
+
+- name: Extract Home Assistant data for AI automation
+  hosts: raspberrypi
+  gather_facts: yes
+  vars:
+    ha_config_dir: "/home/{{ ansible_user }}/homeassistant"
+    ha_files:
+      - configuration.yaml
+      - automations.yaml
+      - scenes.yaml
+      - scripts.yaml
+    ha_dirs:
+      - custom_components
+      - blueprints
+  tasks:
+    - name: Copy Home Assistant config files to control machine (if they exist)
+      fetch:
+        src: "{{ ha_config_dir }}/{{ item }}"
+        dest: "{{ ai_base_dir }}/{{ item }}"
+        flat: yes
+      with_items: "{{ ha_files }}"
+      ignore_errors: yes
+      when: inventory_hostname != 'localhost'
+
+    - name: Copy Home Assistant directories to control machine (if they exist)
+      synchronize:
+        src: "{{ ha_config_dir }}/{{ item }}"
+        dest: "{{ ai_base_dir }}/{{ item }}"
+        mode: pull
+        recursive: yes
+      with_items: "{{ ha_dirs }}"
+      ignore_errors: yes
+      when: inventory_hostname != 'localhost'
+
+    - name: Exclude secrets.yaml if present
+      delegate_to: localhost
+      file:
+        path: "{{ ai_base_dir }}/secrets.yaml"
+        state: absent
+      ignore_errors: yes
+
+    - name: Fetch all Home Assistant entities and attributes via API
+      uri:
+        url: "http://basichub.local:8123/api/states"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ home_assistant_token }}"
+          Content-Type: "application/json"
+        return_content: yes
+        status_code: 200
+      register: ha_api_states
+      delegate_to: localhost
+
+    - name: Save entities JSON to file for processing
+      delegate_to: localhost
+      copy:
+        content: "{{ ha_api_states.content }}"
+        dest: "{{ ai_base_dir }}/entities.json"
+
+    - name: Assemble all data into a single Markdown file (functional Python script)
+      delegate_to: localhost
+      script: ../templates/assemble_ha_ai_md.py
+      args:
+        chdir: "{{ ai_base_dir }}"
+
+    - name: Remove temporary entities.json after assembly
+      delegate_to: localhost
+      file:
+        path: "{{ ai_base_dir }}/entities.json"
+        state: absent
+      ignore_errors: yes
+
+    - name: Copy Home Assistant device registry to control machine (if it exists)
+      fetch:
+        src: "{{ ha_config_dir }}/.storage/core.device_registry"
+        dest: "{{ ai_base_dir }}/core.device_registry"
+        flat: yes
+      ignore_errors: yes
+      when: inventory_hostname != 'localhost'
+
+    - name: Copy Home Assistant entity registry to control machine (if it exists)
+      fetch:
+        src: "{{ ha_config_dir }}/.storage/core.entity_registry"
+        dest: "{{ ai_base_dir }}/core.entity_registry"
+        flat: yes
+      ignore_errors: yes
+      when: inventory_hostname != 'localhost' 
