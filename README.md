@@ -13,6 +13,7 @@ playbooks/
   setup_tailscale.yml         # Installs and configures Tailscale VPN
   backup_user_directory.yml   # Backs up the user directory
   restore_user_directory.yml  # Restores the user directory from backup
+  extract_home_assistant_ai.yml  # Exports Home Assistant data for AI/automation
 templates/
   home_assistent_docker_compose.yml.j2  # Docker Compose template for Home Assistant
 hosts.ini                # Ansible inventory (edit for your setup)
@@ -119,6 +120,22 @@ ansible-playbook -i hosts.ini playbooks/backup_user_directory.yml
 ansible-playbook -i hosts.ini playbooks/restore_user_directory.yml
 ```
 - Restores the latest backup by default, or specify a backup file with `-e "backup_file=/path/to/backup.tar.gz"`
+
+---
+
+### 7. Export Home Assistant Data for AI/Automation
+
+This playbook extracts all relevant Home Assistant configuration, entities, devices, and registry data from your Raspberry Pi to your control machine for further processing (e.g., AI automation, documentation, or migration).
+
+```sh
+ansible-playbook -i hosts.ini playbooks/extract_home_assistant_ai.yml
+```
+- Exports:
+  - `configuration.yaml`, `automations.yaml`, `scenes.yaml`, `scripts.yaml`
+  - `custom_components/`, `blueprints/`
+  - Device and entity registries (`core.device_registry`, `core.entity_registry`)
+  - All entities and their states via the Home Assistant API
+- Assembles all data into a single Markdown file (`home_assistant_full_export.md`) in your `ai_base_dir` for easy review or AI processing.
 
 ---
 
